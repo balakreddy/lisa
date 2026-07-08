@@ -156,7 +156,7 @@ class FedoraCloudValidation(TestSuite):
         state = result.stdout.strip()
         node.log.info(f"systemctl is-system-running:\n{state}")
 
-        if result.exit_code > 0:
+        if result.exit_code != 0:
             failed_units_result = node.execute("systemctl --all --failed --no-pager")
             node.log.info(f"Failed units:\n{failed_units_result.stdout}")
             assert_that(state).described_as(
