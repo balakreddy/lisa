@@ -5,8 +5,7 @@
 Fedora Cloud Validation Tests
 
 This test suite validates Fedora cloud image configuration and
-functionality. Tests cover OS identification, package management,
-boot validation, service status, system logging, and user management.
+functionality. Tests cover OS identification and service status validation.
 """
 
 from logging import Logger
@@ -24,6 +23,7 @@ from lisa import (
 )
 from lisa.operating_system import Fedora
 from lisa.tools import Cat
+from lisa.util import check_till_timeout
 
 
 @TestSuiteMetadata(
@@ -33,8 +33,7 @@ from lisa.tools import Cat
     Fedora Cloud Image Validation Tests.
 
     Validates Fedora cloud image configuration across cloud platforms.
-    Tests cover: OS identification, package management, boot validation,
-    service status, system logging, and user management.
+    Tests cover: OS identification and service status validation.
     """,
 )
 class FedoraCloudValidation(TestSuite):
@@ -57,7 +56,7 @@ class FedoraCloudValidation(TestSuite):
         description="""
         Verify Fedora edition self-identification.
 
-        Validates /etc/os-release fields, fedora-release package version,
+        Validates /etc/os-release fields, fedora-release-common package version,
         and SUPPORT_END date.
         """,
         priority=1,
@@ -71,7 +70,7 @@ class FedoraCloudValidation(TestSuite):
         - ID is "fedora"
         - VERSION is present
         - CPE_NAME includes :fedora:<VERSION_ID>
-        - Installed fedora-release RPM version matches VERSION_ID
+        - Installed fedora-release-common RPM version matches VERSION_ID
         - SUPPORT_END date is still in the future
         - PRETTY_NAME field is present
         """
@@ -149,17 +148,25 @@ class FedoraCloudValidation(TestSuite):
         """
         Validate no systemd services are in failed state.
 
-        Verifies systemctl --all --failed reports zero loaded failed units.
+        Waits for system to settle (exit 'starting' state), then verifies
+        systemctl is-system-running reports 'running'.
         """
-        # Check for failed services
-        result = node.execute("systemctl is-system-running")
-        state = result.stdout.strip()
-        node.log.info(f"systemctl is-system-running:\n{state}")
+        check_till_timeout(
+            func=lambda: node.execute("systemctl is-system-running").stdout.strip()
+            not in ("initializing", "starting"),
+            timeout_message="System did not settle within 60 seconds",
+            timeout=60,
+            interval=5,
+        )
+        state = node.execute("systemctl is-system-running").stdout.strip()
 
-        if result.exit_code != 0:
+        # After settling, verify system is running
+        if state != "running":
             failed_units_result = node.execute("systemctl --all --failed --no-pager")
             node.log.info(f"Failed units:\n{failed_units_result.stdout}")
             assert_that(state).described_as(
                 f"System must be running (got {state}). "
                 f"Failed: {failed_units_result.stdout}"
             ).is_equal_to("running")
+
+        node.log.info("No failed services detected")
