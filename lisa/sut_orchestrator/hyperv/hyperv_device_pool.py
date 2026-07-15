@@ -561,6 +561,14 @@ Get-VM | ForEach-Object {{
     ) -> None:
         if not node_runbook.device_passthrough:
             return
+        for config in node_runbook.device_passthrough:
+            if config.count <= 0:
+                raise LisaException(
+                    "Hyper-V device_passthrough count must be greater than 0 "
+                    f"for pool type '{config.pool_type.value}'. Set "
+                    "device_passthrough.count to a positive value in the runbook."
+                )
+
         hv.enable_device_passthrough(name=vm_name)
 
         for config in node_runbook.device_passthrough:
@@ -574,5 +582,6 @@ Get-VM | ForEach-Object {{
             )
             device_context = DevicePassthroughContext()
             device_context.pool_type = config.pool_type
+            device_context.requested_count = config.count
             device_context.device_list = devices
             node_context.passthrough_devices.append(device_context)
