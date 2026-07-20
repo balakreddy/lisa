@@ -12,6 +12,7 @@ from microsoft.testsuites.vm_extensions.runtime_extensions.common import (
     execute_command,
     retrieve_storage_account_name_and_key,
     retrieve_storage_blob_url,
+    run_extension_boot_validation,
 )
 
 from lisa import (
@@ -98,6 +99,35 @@ def _create_and_verify_extension_run(
     ),
 )
 class RunCommandV1Tests(TestSuite):
+    @TestCaseMetadata(
+        description="""
+        Basic boot validation for the Run Command v1 VM extension.
+
+        Installs the extension with a single inline commandToExecute and no file
+        URIs, so it needs no storage account or public blob access. Verifies that
+        provisioning succeeds, then removes the extension.
+
+        The extension publisher and type are read from runbook variables
+        (extension_publisher, extension_type), defaulting to the Run Command v1
+        extension. The extension_version runbook variable is required; the test
+        is skipped if it is not set. The deployed extension is named
+        '<publisher>_<extension_type>_boot_validation_test'.
+        """,
+        priority=5,
+        maturity="preview",
+    )
+    def microsoft_cplat_core_runcommandlinux_boot_validation_test(
+        self, log: Logger, node: Node, variables: Dict[str, Any]
+    ) -> None:
+        run_extension_boot_validation(
+            node=node,
+            log=log,
+            variables=variables,
+            default_publisher="Microsoft.CPlat.Core",
+            default_extension_type="RunCommandLinux",
+            settings={"commandToExecute": "echo 'RCv1 boot validation success'"},
+        )
+
     @TestCaseMetadata(
         description="""
         Runs the Run Command v2 VM extension with a public Azure storage file uri.

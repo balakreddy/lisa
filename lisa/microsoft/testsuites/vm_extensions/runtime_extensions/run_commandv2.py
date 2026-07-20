@@ -10,6 +10,7 @@ from microsoft.testsuites.vm_extensions.runtime_extensions.common import (
     create_and_verify_vmaccess_extension_run,
     execute_command,
     retrieve_storage_blob_url,
+    run_extension_boot_validation,
 )
 
 from lisa import (
@@ -102,6 +103,48 @@ class RunCommandV2Tests(TestSuite):
         node: Node = kwargs.pop("node")
         _check_architecture_supported(node=node)
         check_waagent_version_supported(node=node)
+
+    @TestCaseMetadata(
+        description="""
+        Basic boot validation for the Run Command v2 VM extension.
+
+        Installs the extension with a single inline RunShellScript command and no
+        script URIs, so it needs no storage account or public blob access. Verifies
+        that provisioning succeeds.
+
+        The RunCommand v2 (RunCommandHandlerLinux) extension is managed by the
+        Compute Resource Provider and cannot be removed with a normal
+        'Delete VM Extension' operation, so no explicit cleanup is done here; the
+        resource group teardown removes it.
+
+        The extension publisher and type are read from runbook variables
+        (extension_publisher, extension_type), defaulting to the Run Command v2
+        extension. The extension_version runbook variable is required; the test
+        is skipped if it is not set. The deployed extension is named
+        '<publisher>_<extension_type>_boot_validation_test'.
+        """,
+        priority=5,
+        maturity="preview",
+    )
+    def microsoft_cplat_core_runcommandhandlerlinux_boot_validation_test(
+        self, log: Logger, node: Node, variables: Dict[str, Any]
+    ) -> None:
+        run_extension_boot_validation(
+            node=node,
+            log=log,
+            variables=variables,
+            default_publisher="Microsoft.CPlat.Core",
+            default_extension_type="RunCommandHandlerLinux",
+            settings={
+                "source": {
+                    "CommandId": "RunShellScript",
+                    "script": "echo 'RCv2 boot validation success'",
+                }
+            },
+            # RunCommand v2 is CRP-managed and cannot be deleted; resource
+            # group teardown handles cleanup.
+            cleanup=False,
+        )
 
     @TestCaseMetadata(
         description="""
