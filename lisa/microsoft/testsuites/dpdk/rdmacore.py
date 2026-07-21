@@ -137,19 +137,19 @@ class RdmaCorePackageManagerInstall(PackageManagerInstall):  # type: ignore[misc
 # implement SourceInstall for DPDK
 class RdmaCoreSourceInstaller(Installer):  # type: ignore[misc]
     def _check_if_installed(self) -> bool:
+        # check if pkg-config info is available
         try:
-            package_manager_install = self._os.package_exists("rdma-core")
-            # _get_installed_version for source install throws
-            # if package is not found. So we don't need the result,
-            # if the function doesn't throw, the version was found.
             _ = self.get_installed_version()
-            # this becomes '(not package manager installed) and
-            #                _get_installed_version() doesn't throw'
-            return not package_manager_install
         except AssertionError:
-            # _get_installed_version threw an AssertionError
-            # so PkgConfig info was not found
+            # get_installed_version threw an AssertionError
+            # PkgConfig info was not found;
+            # so it's not a source installation.
             return False
+
+        # check if the package was installed from apt, dnf, etc.
+        package_manager_install = self._os.package_exists("rdma-core")
+        # we don't want it to be installed from the package manager.
+        return not package_manager_install
 
     def _setup_node(self) -> None:
         if isinstance(self._os, (Debian, Fedora, Suse)):
@@ -198,3 +198,18 @@ class RdmaCoreSourceInstaller(Installer):  # type: ignore[misc]
             sudo=True,
         )
         make.make_install(self.asset_path)
+        # rdma-core installs some systemd services for infiniband that
+        # we don't actually want enabled for these dpdk tests.
+        #
+        # this ends up preventing login via ssh for like 3 minutes
+        # while it times out and restarts during the next boot.
+        #
+        # We're only using rdma for the ib verbs,
+        # so we can safely just mask this service.
+        mask_result = node.execute("systemctl mask rdma-ndd.service", sudo=True)
+        if mask_result.exit_code != 0:
+            node.log.debug(
+                "Failed to mask rdma-ndd.service "
+                f"(exit_code={mask_result.exit_code}). "
+                f"stdout: {mask_result.stdout}, stderr: {mask_result.stderr}"
+            )
